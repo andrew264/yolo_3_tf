@@ -12,12 +12,13 @@ from utils import load_class_names, load_weights
 
 
 _MODEL_SIZE = (416, 416)
-class_name = load_class_names('coco.names')
-n_classes = len(class_name)
+class_names = load_class_names('coco.names')
+n_classes = len(class_names)
 max_output_size = 10
 iou_threshold = 0.5
 confidence_threshold = 0.5
 colour = [255, 12, 12]
+video_path: str|int = 0  # 0 for webcam, or path to video file or can be YouTube link (https://www.youtube.com/watch?v=dQw4w9WgXcQ)
 
 
 def _load_model():
@@ -62,12 +63,27 @@ def _draw_bindbox(frame, boxes_dict, class_names):
     return frame
 
 
+def _load_from_youtube(url: str) -> str:
+    import yt_dlp
+    ydl_opts = {
+        'outtmpl': 'tmp/video.%(ext)s',
+        'format': 'best[height<=480][ext=mp4]',
+    }
+    print('downloading video...')
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info_dict = ydl.extract_info(url, download=True)
+    print('video downloaded.')
+    return 'tmp/video.mp4'
+
+
 if __name__ == '__main__':
     with tf.compat.v1.Session() as sess:
         inputs, detections, assign_ops = _load_model()
         sess.run(assign_ops)
         print('starting video stream...')
-        cap = cv2.VideoCapture(0)
+        if isinstance(video_path, str) and video_path.startswith('https://'):
+            video_path = _load_from_youtube(video_path)
+        cap = cv2.VideoCapture(video_path)
         if not cap.isOpened():
             print("Error: Could not open camera.")
             exit()
@@ -83,7 +99,7 @@ if __name__ == '__main__':
             resized_frame = cv2.resize(frame, (416, 416))
             detection_result = sess.run(detections, feed_dict={inputs: [resized_frame]})[0]
             
-            frame_with_boxes = _draw_bindbox(frame, detection_result, [class_name[0]])
+            frame_with_boxes = _draw_bindbox(frame, detection_result, [class_names[0]])
 
             frame_count += 1
             elapsed_time = time.time() - start_time
